@@ -1,60 +1,104 @@
 import cv2
-import torch
-import torchvision
-from torchvision.transforms import functional as F
+import threading
+import tempfile
+import time
+from inference_sdk import InferenceHTTPClient
 
-# Load the pre-trained model
-model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=True)
-model.eval()
+# Initialize the inference client
+CLIENT = InferenceHTTPClient(
+    api_url="https://detect.roboflow.com",
+    api_key="YOUR_API_KEY" 
+)
 
-# Define a function to process frames
-def process_frame(frame, model, threshold=0.5):
-    # Convert the frame to a PIL image and transform it for the model
-    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    pil_image = F.to_pil_image(frame_rgb)
-    tensor_image = F.to_tensor(pil_image).unsqueeze(0)
-    
-    # Perform object detection
-    with torch.no_grad():
-        predictions = model(tensor_image)[0]
-    
-    # Draw bounding boxes for detected objects
-    for box, label, score in zip(predictions['boxes'], predictions['labels'], predictions['scores']):
-        if score >= threshold:  # Adjust this threshold based on your needs
-            x1, y1, x2, y2 = box.int().tolist()
-            cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
-            cv2.putText(frame, f"Object: {score:.2f}", 
-                        (x1, y1 - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 2)
-    return frame
+video_capture = cv2.VideoCapture(0)
+class_positions = {
+    "Balls in general": {"x": None, "y": None, "timestamp": 0},
+    "Soccer ball": {"x": None, "y": None, "timestamp": 0},
+    "tennis-ball": {"x": None, "y": None, "timestamp": 0},
+}
+class_colors = {
+    "Balls in general": (255, 0, 0),  # Blue
+    "Soccer ball": (0, 255, 0),       # Green
+    "tennis-ball": (0, 0, 255),       # Red
+}
+frame = None
+position_lock = threading.Lock()
 
-# Open the webcam (camera ID 0 is typically the default camera)
-camera_id = 0  # Change this if you have multiple cameras
-cap = cv2.VideoCapture(camera_id)
+def capture_frame():
+    global frame
+    while True:
+        ret, new_frame = video_capture.read()
+        if ret:
+            frame = new_frame
+#track
+def track_object_positions():
+    global class_positions
+    while True:
+        if frame is not None:
+            # tempfile
+            with tempfile.NamedTemporaryFile(suffix=".jpg", delete=False) as temp_file:
+                temp_path = temp_file.name
+                cv2.imwrite(temp_path, frame)
 
-# Check if the webcam is opened successfully
-if not cap.isOpened():
-    print("Error: Cannot access the camera.")
-    exit()
+            try:
+                response = CLIENT.infer(temp_path, model_id="ball_set-lyem5/3")
 
-print("Press 'q' to exit the live feed.")
+                if "predictions" in response:
+                    current_time = time.time()
+                    with position_lock:
+                        for prediction in response["predictions"]:
+                            confidence = prediction["confidence"]
+                            
+                            if confidence > 0.65:
+                                x, y = int(prediction["x"]), int(prediction["y"])
+                                label = prediction["class"]
 
-# Process the video feed frame by frame
+                                if label in class_positions:
+
+                                    class_positions[label]["x"] = x
+                                    class_positions[label]["y"] = y
+                                    class_positions[label]["timestamp"] = current_time
+            except Exception as e:
+                print(f"Inference error: {e}")
+
+capture_thread = threading.Thread(target=capture_frame, daemon=True)
+tracking_thread = threading.Thread(target=track_object_positions, daemon=True)
+
+capture_thread.start()
+tracking_thread.start()
+
 while True:
-    ret, frame = cap.read()
-    if not ret:
-        print("Error: Cannot read frame from camera.")
-        break
+    if frame is not None:
+        current_time = time.time()
 
-    # Detect objects in the current frame
-    processed_frame = process_frame(frame, model)
+        with position_lock:
+            for label, data in class_positions.items():
+                x, y = data["x"], data["y"]
+                last_seen = data["timestamp"]
+
     
-    # Display the frame with detections
-    cv2.imshow("Live Ball Detection", processed_frame)
-    
-    # Press 'q' to exit the live video feed
+                if current_time - last_seen <= 5 and x is not None and y is not None:
+
+                    color = class_colors[label]
+                    cv2.circle(frame, (x, y), 10, color, -1) 
+                    cv2.putText(
+                        frame,
+                        f"{label}",
+                        (x + 15, y - 15),
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.5,
+                        color,
+                        2,
+                    )
+                else:
+   
+                    class_positions[label] = {"x": None, "y": None, "timestamp": 0}
+
+        cv2.imshow("Live Video Inference", frame)
+
+
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
-# Release the camera and close all windows
-cap.release()
+video_capture.release()
 cv2.destroyAllWindows()
