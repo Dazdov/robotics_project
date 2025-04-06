@@ -8,7 +8,7 @@ from inference_sdk import InferenceHTTPClient
 # Initialize the inference client
 CLIENT = InferenceHTTPClient(
     api_url="https://detect.roboflow.com",
-    api_key="API_KEY" 
+    api_key="API_KEY"
 )
 
 # Initialize serial communication with Arduino
@@ -52,7 +52,7 @@ def track_object_positions():
                     with position_lock:
                         for prediction in response["predictions"]:
                             confidence = prediction["confidence"]
-                            if confidence > 0.85:
+                            if confidence > 0.60:
                                 x, y = int(prediction["x"]), int(prediction["y"])
                                 label = prediction["class"]
                                 if label in class_positions:
@@ -90,16 +90,22 @@ while True:
                         2,
                     )
                     # Send serial commands for the "Soccer ball"
+                    time.sleep(0.2)
                     if label == "Soccer ball":
-                        if x < 240:
-                            arduino.write(b'2')
-                        elif x > 400:
-                            arduino.write(b'3')
+                        if x > 400:
+                            arduino.write(b'2')  # Turn right
+                        elif x < 240:
+                            arduino.write(b'3')  # Turn left
                         else:
-                            arduino.write(b'1')
+                            arduino.write(b'1')  # Move forward
                 else:
                     # Reset the position if the detection is outdated
                     class_positions[label] = {"x": None, "y": None, "timestamp": 0}
+
+        # Draw vertical lines at x = 240 and x = 400
+        height = frame.shape[0]  # Get the height of the frame
+        cv2.line(frame, (240, 0), (240, height), (0, 255, 255), 2)  # Yellow line at x = 240
+        cv2.line(frame, (400, 0), (400, height), (0, 255, 255), 2)  # Yellow line at x = 400
 
         cv2.imshow("Live Video Inference", frame)
 
