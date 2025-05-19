@@ -9,8 +9,8 @@ void setup() {
 // Modified speedMotor function with 50% speed increase
 void speedMotor(int leftSpeed, int rightSpeed) {
   // Apply 50% speed boost to all values
-  leftSpeed = leftSpeed * 2;
-  rightSpeed = rightSpeed * 2;
+  leftSpeed = leftSpeed * 2.55;
+  rightSpeed = rightSpeed * 2.55;
   
   // Constrain values to prevent overflow (max 255 PWM value)
   leftSpeed = constrain(leftSpeed, -255, 255);
