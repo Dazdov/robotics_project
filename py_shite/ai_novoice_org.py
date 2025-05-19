@@ -6,7 +6,7 @@ import serial
 from inference_sdk import InferenceHTTPClient
 
 # === Constants ===
-API_KEY = "TY2c0swGjZnlQrqQiHSG"
+API_KEY = "API_KEY"
 MODEL_ID = "ball_set-lyem5/3"
 SERIAL_PORT = '/dev/ttyACM0'
 BAUD_RATE = 9600
