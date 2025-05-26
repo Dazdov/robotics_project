@@ -85,6 +85,8 @@ void loop() {
       case '3':  // Turn left
         reducedSpeedMotor(0, 60, 100);
         break;
+      case '4'
+        return 0;
     }
   }
 }
