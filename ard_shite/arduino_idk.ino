@@ -1,3 +1,4 @@
+
 void setup() {
   Serial.begin(9600);
   // Set pins 5 through 10 as outputs
@@ -59,11 +60,11 @@ void reducedSpeedMotor(int leftSpeed, int rightSpeed, int duration) {
   while (millis() - startTime < duration) {
     // Apply full power for the interval
     speedMotor(leftSpeed, rightSpeed);
-    delay(pwmInterval/2);
+    delay(30);
     
     // Cut power for the other half
     stopMotors();
-    delay(pwmInterval/2);
+    delay(10);
   }
   stopMotors();
 }
@@ -75,7 +76,7 @@ void loop() {
     // Movement commands (original values, but will be boosted internally)
     switch(command) {
       case '1':  // Forward
-        reducedSpeedMotor(100, 100, 100);
+        reducedSpeedMotor(70, 85, 100);
         break;
         
       case '2':  // Turn right
@@ -83,10 +84,11 @@ void loop() {
         break;
         
       case '3':  // Turn left
-        reducedSpeedMotor(0, 60, 100);
+        reducedSpeedMotor(0, 60,100);
         break;
-      case '4'
-        return 0;
+      case '4':
+        stopMotors();
+        break;
     }
   }
 }
